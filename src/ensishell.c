@@ -52,10 +52,7 @@ int executer(char *line)
             //name of file for output redirection
             // question 6
         }
-        if (sline->bg != 0) {
-            // question 2-4
-            //the command must run in background
-        }
+
         if (sline->seq != NULL) {
             // on execute chacune des commandes
             // question 5
@@ -77,7 +74,9 @@ int executer(char *line)
                     break;
                 default:
                     // si on est le père
-                    waitpid(pid, &status ,0);
+                    if (sline->bg == 0)  //question 3
+                        waitpid(pid, &status ,0); //question 2
+                    // else the command must run in background (par defaut)
                     break;
             }
         }
