@@ -10,6 +10,7 @@
 
 #include "variante.h"
 #include "readcmd.h"
+#include <unistd.h>
 
 #ifndef VARIANTE
 #error "Variante non défini !!"
@@ -31,7 +32,50 @@ int executer(char *line)
 	 * parsecmd, then fork+execvp, for a single command.
 	 * pipe and i/o redirection are not required.
 	 */
-	printf("Not implemented: can not execute %s\n", line);
+        struct cmdline *sline = parsecmd(&line);
+	if (sline == NULL) {
+            //si on a pas de commande
+        }
+        if (sline->err != 0) {
+            // on a eu une erreur dans la commande
+            // on doit afficher un message d'erreur
+        }
+        if (sline->in != 0) {
+            //name of file for input redirection
+            // question 6
+        }
+        if (sline->out != 0) {
+            //name of file for output redirection
+            // question 6
+        }
+        if (sline->bg != 0) {
+            // question 2-4
+            //the command must run in background
+        }
+        if (sline->seq != NULL) {
+            // on execute chacune des commandes
+            // question 5
+            // séparation par pipe
+            //for (int i = 0; sline->seq[i]!=0 ;i++) {
+                //char **cour_cmd = sline[i];
+                // la sortie d'une commande est l'entrée de la suivante
+                // TODO
+            //}
+            char **cmd = sline->seq[0];
+            pid_t pid;
+            switch(pid = fork()) {
+                case -1:
+                    perror("fork: erreur de création de processus fils" ); 
+                    break;
+                case 0:
+                    // si on est le fils
+                    execvp(cmd[0], cmd);
+                    break;
+                default:
+                    // si on est le père
+                    break;
+            }
+        }
 
 	/* Remove this line when using parsecmd as it will free it */
 	free(line);
@@ -96,6 +140,7 @@ int main() {
                         continue;
                 }
 #endif
+                executer(line);
 
 		/* parsecmd free line and set it up to 0 */
 		l = parsecmd( & line);
@@ -127,6 +172,7 @@ int main() {
                         }
 			printf("\n");
 		}
+                
 	}
 
 }
