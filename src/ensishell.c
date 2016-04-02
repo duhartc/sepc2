@@ -11,6 +11,9 @@
 #include "variante.h"
 #include "readcmd.h"
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 
 #ifndef VARIANTE
 #error "Variante non défini !!"
@@ -32,6 +35,7 @@ int executer(char *line)
 	 * parsecmd, then fork+execvp, for a single command.
 	 * pipe and i/o redirection are not required.
 	 */
+        int status;
         struct cmdline *sline = parsecmd(&line);
 	if (sline == NULL) {
             //si on a pas de commande
@@ -73,13 +77,11 @@ int executer(char *line)
                     break;
                 default:
                     // si on est le père
+                    waitpid(pid, &status ,0);
                     break;
             }
         }
 
-	/* Remove this line when using parsecmd as it will free it */
-	free(line);
-	
 	return 0;
 }
 
