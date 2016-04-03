@@ -98,6 +98,8 @@ int executer(char *line, struct list_bg **list_bg)
 	 * pipe and i/o redirection are not required.
 	 */
         int status;
+        int tuyau[2];
+        pipe(tuyau);
         struct cmdline *sline = parsecmd(&line);
 	if (sline == NULL) {
             //si on a pas de commande
@@ -116,43 +118,65 @@ int executer(char *line, struct list_bg **list_bg)
         }
 
         if (sline->seq != NULL) {
-            // on execute chacune des commandes
-            // question 5
+            // pipe multiple ici, à gérer plus tard
             // séparation par pipe
             //for (int i = 0; sline->seq[i]!=0 ;i++) {
                 //char **cour_cmd = sline[i];
                 // la sortie d'une commande est l'entrée de la suivante
                 // TODO
             //}
-            char **cmd = sline->seq[0];
-            // verif si jobs
-            if (strcmp(cmd[0],"jobs") == 0) {
-                list_bg_jobs(list_bg);
-            } 
-            else {
-                pid_t pid;
-                switch(pid = fork()) {
-                    case -1:
-                        perror("fork: erreur de création de processus fils" ); 
-                        break;
-                    case 0:
-                        // si on est le fils
-                        execvp(cmd[0], cmd);
-                        break;
-                    default:
-                        // si on est le père
-                        if (sline->bg == 0)  //question 3
-                            waitpid(pid, &status ,0); //question 2
-                        else {
-                            //the command must run in background (par defaut)
-                            // on ajoute le processus à la liste
-                            *list_bg = add_jobs(*list_bg, cmd[0], pid);
-                        }
-                        break;
+            int nbCmd = 0;
+            while (sline->seq[nbCmd] != 0) {
+                nbCmd++;
+            }
+            // jobs : question 4
+            for (int i = 0; i < nbCmd; i++) {
+                char **cmd = sline->seq[i];
+                if (strcmp(cmd[0],"jobs") == 0) {
+                    list_bg_jobs(list_bg);
+                } 
+                else {
+                    pid_t pid;
+                    switch(pid = fork()) {
+                        case -1:
+                            perror("fork: erreur de création de processus fils" ); 
+                            break;
+                        case 0:
+                            // si on est le fils
+                            // TODO fonction pour facto
+                            if (i == 1) {
+                                if (nbCmd > 1) {
+                                    dup2(tuyau[0],STDIN_FILENO);
+                                    close(tuyau[0]);close(tuyau[1]);
+                                }
+                                execvp(cmd[0], cmd); 
+                            }
+                            else if (i == 0) {
+                                if (nbCmd > 1) {
+                                    dup2(tuyau[1], STDOUT_FILENO);
+                                    close(tuyau[1]);close(tuyau[0]);
+                                }
+                                execvp(cmd[0], cmd);
+                            }
+                            break;
+                        default:
+                            // si on est le père
+                            if (sline->bg == 0) {  //question 3
+                                if (i == nbCmd - 1) {
+                                    close(tuyau[1]); close(tuyau[0]);
+                                    waitpid(pid, &status ,0); //question 2
+                                }
+                            }
+                            else {
+                                //the command must run in background (par defaut)
+                                // on ajoute le processus à la liste
+                                *list_bg = add_jobs(*list_bg, cmd[0], pid);
+                            }
+                            break;
+                    }
                 }
             }
         }
-
 	return 0;
 }
 
@@ -214,14 +238,6 @@ int main() {
                 }
 #endif
                 executer(line, &list_bg);
-                struct list_bg * cour = list_bg;
-                printf("affichage verif: \n");
-                while (cour != NULL) {
-                    printf("%d %s", cour->pid, cour->cmd);
-                    cour = cour-> nxt;
-                }
-                printf("fin\n");
-		
 	}
 
 }
