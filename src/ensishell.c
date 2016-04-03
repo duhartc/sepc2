@@ -15,9 +15,11 @@
 #include <sys/wait.h>
 #include <stdbool.h>
 #include <string.h>
+#include <bsd/string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <wordexp.h>
 
 
 #ifndef VARIANTE
@@ -105,6 +107,7 @@ int executer(char *line, struct list_bg **list_bg)
         int tuyau[2];
         int in = 0;
         int out = 0;
+        wordexp_t p;
         pipe(tuyau);
         struct cmdline *sline = parsecmd(&line);
 	if (sline == NULL) {
@@ -129,6 +132,30 @@ int executer(char *line, struct list_bg **list_bg)
             // jobs : question 4
             for (int i = 0; i < nbCmd; i++) {
                 char **cmd = sline->seq[i];
+                // joker en wordexp
+                int taille_cmd = 0;
+                while (cmd[taille_cmd] != NULL) {
+                    taille_cmd++;
+                } 
+                int tab_sous_taille_exp[taille_cmd];
+                char **tab_exp[taille_cmd];
+                int taille_totale = 0;
+                for (int t = 0; t < taille_cmd; t++) {
+                    wordexp(cmd[t], &p, 0);
+                    tab_exp[t] = p.we_wordv;
+                    tab_sous_taille_exp[t] = p.we_wordc;
+                    taille_totale += p.we_wordc;
+                }
+                char *new_cmd[taille_totale + 1];
+                int k = 0;
+                for (int i = 0; i < taille_cmd; i++) {
+                    for (int j = 0; j < tab_sous_taille_exp[i]; j++) {
+                        new_cmd[k] = tab_exp[i][j];
+                        k++;
+                    }
+                }
+                new_cmd[taille_totale]= NULL;
+                
                 if (strcmp(cmd[0],"jobs") == 0) {
                     list_bg_jobs(list_bg);
                 } 
@@ -166,7 +193,7 @@ int executer(char *line, struct list_bg **list_bg)
                                         dup2(tuyau[1], STDOUT_FILENO);
                                         close(tuyau[1]);close(tuyau[0]);
                                     }
-                                    execvp(cmd[0], cmd);
+                                    execvp(cmd[0], new_cmd);
                                 }
                                 break;
                         default:
