@@ -34,16 +34,37 @@ struct list_bg {
 #if USE_GUILE == 1
 #include <libguile.h>
 
-void list_bg_jobs(struct list_bg *list_bg) {
+void list_bg_jobs(struct list_bg **list_bg) {
     printf("Liste des jobs\n");
-    bool debut = true;
-    struct list_bg *cour = list_bg;
+    bool vide = true;
+    bool debut = false;
+    struct list_bg *cour = *list_bg;
+    struct list_bg *prec = *list_bg;
     while (cour != NULL) {
+        vide = false;
+        printf("%d %s", cour->pid, cour->cmd);
+        if (waitpid(cour->pid, NULL, WNOHANG) != 0) {
+            printf(" fini");
+            // on supprime le job
+            if (cour != *list_bg) {
+                //si on n'est pas au début
+                prec->nxt = cour->nxt;
+            }
+            else {
+                *list_bg = (*list_bg)->nxt;
+                prec = *list_bg;
+                debut = true;
+            }
+            free(cour->cmd);
+            free(cour);
+            cour = prec;
+        }
+        printf("\n");
+        prec = cour;
+        if (!debut) cour = cour->nxt;
         debut = false;
-        printf("%d %s\n", cour->pid, cour->cmd);
-        cour = cour->nxt;
     }
-    if (debut) printf("Pas de job en cours\n");
+    if (vide) printf("Pas de job en cours\n");
 }
 
  struct list_bg *add_jobs(struct list_bg *list_bg, char * cmd, pid_t pid) {
@@ -106,27 +127,29 @@ int executer(char *line, struct list_bg **list_bg)
             char **cmd = sline->seq[0];
             // verif si jobs
             if (strcmp(cmd[0],"jobs") == 0) {
-                list_bg_jobs(*list_bg);
+                list_bg_jobs(list_bg);
             } 
-            pid_t pid;
-            switch(pid = fork()) {
-                case -1:
-                    perror("fork: erreur de création de processus fils" ); 
-                    break;
-                case 0:
-                    // si on est le fils
-                    execvp(cmd[0], cmd);
-                    break;
-                default:
-                    // si on est le père
-                    if (sline->bg == 0)  //question 3
-                        waitpid(pid, &status ,0); //question 2
-                    else {
-                        //the command must run in background (par defaut)
-                        // on ajoute le processus à la liste
-                        *list_bg = add_jobs(*list_bg, cmd[0], pid);
-                    }
-                    break;
+            else {
+                pid_t pid;
+                switch(pid = fork()) {
+                    case -1:
+                        perror("fork: erreur de création de processus fils" ); 
+                        break;
+                    case 0:
+                        // si on est le fils
+                        execvp(cmd[0], cmd);
+                        break;
+                    default:
+                        // si on est le père
+                        if (sline->bg == 0)  //question 3
+                            waitpid(pid, &status ,0); //question 2
+                        else {
+                            //the command must run in background (par defaut)
+                            // on ajoute le processus à la liste
+                            *list_bg = add_jobs(*list_bg, cmd[0], pid);
+                        }
+                        break;
+                }
             }
         }
 
@@ -191,7 +214,13 @@ int main() {
                 }
 #endif
                 executer(line, &list_bg);
-                if (list_bg == NULL) printf("pb");
+                struct list_bg * cour = list_bg;
+                printf("affichage verif: \n");
+                while (cour != NULL) {
+                    printf("%d %s", cour->pid, cour->cmd);
+                    cour = cour-> nxt;
+                }
+                printf("fin\n");
 		
 	}
 
