@@ -15,6 +15,10 @@
 #include <sys/wait.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 
 #ifndef VARIANTE
 #error "Variante non défini !!"
@@ -99,6 +103,8 @@ int executer(char *line, struct list_bg **list_bg)
 	 */
         int status;
         int tuyau[2];
+        int in = 0;
+        int out = 0;
         pipe(tuyau);
         struct cmdline *sline = parsecmd(&line);
 	if (sline == NULL) {
@@ -108,15 +114,6 @@ int executer(char *line, struct list_bg **list_bg)
             // on a eu une erreur dans la commande
             // on doit afficher un message d'erreur
         }
-        if (sline->in != 0) {
-            //name of file for input redirection
-            // question 6
-        }
-        if (sline->out != 0) {
-            //name of file for output redirection
-            // question 6
-        }
-
         if (sline->seq != NULL) {
             // pipe multiple ici, à gérer plus tard
             // séparation par pipe
@@ -143,28 +140,44 @@ int executer(char *line, struct list_bg **list_bg)
                             break;
                         case 0:
                             // si on est le fils
-                            // TODO fonction pour facto
-                            if (i == 1) {
-                                if (nbCmd > 1) {
-                                    dup2(tuyau[0],STDIN_FILENO);
-                                    close(tuyau[0]);close(tuyau[1]);
+                                if (sline->in != 0) {
+                                    //name of file for input redirection
+                                    // question 6
+                                    in = open(sline->in, O_RDONLY);
+                                    dup2(in, STDIN_FILENO);
                                 }
-                                execvp(cmd[0], cmd); 
-                            }
-                            else if (i == 0) {
-                                if (nbCmd > 1) {
-                                    dup2(tuyau[1], STDOUT_FILENO);
-                                    close(tuyau[1]);close(tuyau[0]);
+                                if (sline->out != 0) {
+                                    //name of file for output redirection
+                                    // question 6
+                                    out = open(sline->out, O_WRONLY | O_CREAT | O_TRUNC, 
+                                            S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP );
+                                    dup2(out, STDOUT_FILENO);
                                 }
-                                execvp(cmd[0], cmd);
-                            }
-                            break;
+                                // TODO fonction pour facto
+                                if (i == 1) {
+                                    if (nbCmd > 1) {
+                                        dup2(tuyau[0],STDIN_FILENO);
+                                        close(tuyau[0]);close(tuyau[1]);
+                                    }
+                                    execvp(cmd[0], cmd); 
+                                }
+                                else if (i == 0) {
+                                    if (nbCmd > 1) {
+                                        dup2(tuyau[1], STDOUT_FILENO);
+                                        close(tuyau[1]);close(tuyau[0]);
+                                    }
+                                    execvp(cmd[0], cmd);
+                                }
+                                break;
                         default:
                             // si on est le père
                             if (sline->bg == 0) {  //question 3
                                 if (i == nbCmd - 1) {
+                                    // on attend le dernier
                                     close(tuyau[1]); close(tuyau[0]);
-                                    waitpid(pid, &status ,0); //question 2
+                                    waitpid(pid, &status ,0); //question 2 
+                                    if (in != 0) close(in); 
+                                    if (out != 0) close(out);
                                 }
                             }
                             else {
