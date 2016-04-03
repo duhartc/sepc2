@@ -138,11 +138,13 @@ int executer(char *line, struct list_bg **list_bg)
                     taille_cmd++;
                 } 
                 int tab_sous_taille_exp[taille_cmd];
+                wordexp_t tab_wordexp[taille_cmd];
                 char **tab_exp[taille_cmd];
                 int taille_totale = 0;
                 for (int t = 0; t < taille_cmd; t++) {
                     wordexp(cmd[t], &p, 0);
                     tab_exp[t] = p.we_wordv;
+                    tab_wordexp[t] = p;
                     tab_sous_taille_exp[t] = p.we_wordc;
                     taille_totale += p.we_wordc;
                 }
@@ -186,7 +188,7 @@ int executer(char *line, struct list_bg **list_bg)
                                         dup2(tuyau[0],STDIN_FILENO);
                                         close(tuyau[0]);close(tuyau[1]);
                                     }
-                                    execvp(cmd[0], cmd); 
+                                    execvp(cmd[0], new_cmd); 
                                 }
                                 else if (i == 0) {
                                     if (nbCmd > 1) {
@@ -214,6 +216,10 @@ int executer(char *line, struct list_bg **list_bg)
                             }
                             break;
                     }
+                }
+                // on free les wordexpr
+                for (int t = 0; t < taille_cmd; t++) {
+                    wordfree(&tab_wordexp[t]);
                 }
             }
         }
