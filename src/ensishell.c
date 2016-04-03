@@ -13,7 +13,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-
+#include <stdbool.h>
+#include <string.h>
 
 #ifndef VARIANTE
 #error "Variante non défini !!"
@@ -24,11 +25,51 @@
  * following lines.  You may also have to comment related pkg-config
  * lines in CMakeLists.txt.
  */
+struct list_bg {
+    char * cmd;
+    pid_t pid;
+    struct list_bg *nxt;
+};
 
 #if USE_GUILE == 1
 #include <libguile.h>
 
-int executer(char *line)
+void list_bg_jobs(struct list_bg *list_bg) {
+    printf("Liste des jobs\n");
+    bool debut = true;
+    struct list_bg *cour = list_bg;
+    while (cour != NULL) {
+        debut = false;
+        printf("%d %s\n", cour->pid, cour->cmd);
+        cour = cour->nxt;
+    }
+    if (debut) printf("Pas de job en cours\n");
+}
+
+ struct list_bg *add_jobs(struct list_bg *list_bg, char * cmd, pid_t pid) {
+    // on crée le nouveau job
+    struct list_bg *new_job = malloc(sizeof(struct list_bg));
+    new_job->pid = pid;
+    char * commande = malloc(sizeof(*cmd) * (strlen(cmd) + 1)); 
+    new_job->cmd = strcpy(commande, cmd);
+    new_job->nxt = NULL;
+    printf("Ajout d'un job\n");
+    printf("%d %s\n", new_job->pid, new_job->cmd);
+    if (list_bg == NULL) {
+        // si la liste est vide
+        return new_job;
+    }
+    else {
+        struct list_bg * temp = list_bg;
+        while(temp->nxt != NULL) {
+            temp = temp->nxt;
+        }
+        temp->nxt = new_job;
+        return list_bg;
+    }
+}
+
+int executer(char *line, struct list_bg **list_bg)
 {
 	/* Insert your code to execute the command line
 	 * identically to the standard execution scheme:
@@ -63,6 +104,10 @@ int executer(char *line)
                 // TODO
             //}
             char **cmd = sline->seq[0];
+            // verif si jobs
+            if (strcmp(cmd[0],"jobs") == 0) {
+                list_bg_jobs(*list_bg);
+            } 
             pid_t pid;
             switch(pid = fork()) {
                 case -1:
@@ -76,7 +121,11 @@ int executer(char *line)
                     // si on est le père
                     if (sline->bg == 0)  //question 3
                         waitpid(pid, &status ,0); //question 2
-                    // else the command must run in background (par defaut)
+                    else {
+                        //the command must run in background (par defaut)
+                        // on ajoute le processus à la liste
+                        *list_bg = add_jobs(*list_bg, cmd[0], pid);
+                    }
                     break;
             }
         }
@@ -84,9 +133,9 @@ int executer(char *line)
 	return 0;
 }
 
-SCM executer_wrapper(SCM x)
+SCM executer_wrapper(SCM x, struct list_bg *list_bg)
 {
-        return scm_from_int(executer(scm_to_locale_stringn(x, 0)));
+        return scm_from_int(executer(scm_to_locale_stringn(x, 0), &list_bg));
 }
 #endif
 
@@ -111,11 +160,11 @@ int main() {
         /* register "executer" function in scheme */
         scm_c_define_gsubr("executer", 1, 0, 0, executer_wrapper);
 #endif
-
+        struct list_bg *list_bg = NULL;
 	while (1) {
-		struct cmdline *l;
+		//struct cmdline *l;
 		char *line=0;
-		int i, j;
+		//int i, j;
 		char *prompt = "ensishell>";
 
 		/* Readline use some internal memory structure that
@@ -141,39 +190,9 @@ int main() {
                         continue;
                 }
 #endif
-                executer(line);
-
-		/* parsecmd free line and set it up to 0 */
-		l = parsecmd( & line);
-
-		/* If input stream closed, normal termination */
-		if (!l) {
-		  
-			terminate(0);
-		}
+                executer(line, &list_bg);
+                if (list_bg == NULL) printf("pb");
 		
-
-		
-		if (l->err) {
-			/* Syntax error, read another command */
-			printf("error: %s\n", l->err);
-			continue;
-		}
-
-		if (l->in) printf("in: %s\n", l->in);
-		if (l->out) printf("out: %s\n", l->out);
-		if (l->bg) printf("background (&)\n");
-
-		/* Display each command of the pipe */
-		for (i=0; l->seq[i]!=0; i++) {
-			char **cmd = l->seq[i];
-			printf("seq[%d]: ", i);
-                        for (j=0; cmd[j]!=0; j++) {
-                                printf("'%s' ", cmd[j]);
-                        }
-			printf("\n");
-		}
-                
 	}
 
 }
