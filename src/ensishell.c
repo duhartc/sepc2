@@ -108,7 +108,6 @@ int executer(char *line, struct list_bg **list_bg)
         int in = 0;
         int out = 0;
         wordexp_t p;
-        pipe(tuyau);
         struct cmdline *sline = parsecmd(&line);
 	if (sline == NULL) {
             //si on a pas de commande
@@ -122,12 +121,14 @@ int executer(char *line, struct list_bg **list_bg)
             while (sline->seq[nbCmd] != 0) {
                 nbCmd++;
             }
+            int tuyau_prec[2];
             for (int i = 0; i < nbCmd; i++) {
-                int tuyau_prec[2];
                 memcpy(tuyau_prec, tuyau, sizeof(int)*2);
                 char **cmd = sline->seq[i];
                 bool debut = (i==0);
                 bool fin = (i == nbCmd - 1);
+                if (!fin && nbCmd>1) pipe(tuyau);
+                
                 // joker en wordexp
                 int taille_cmd = 0;
                 while (cmd[taille_cmd] != NULL) {
@@ -159,6 +160,7 @@ int executer(char *line, struct list_bg **list_bg)
                     }
                 }
                 new_cmd[taille_totale]= NULL; // doit obligatoirement se finir par NULL
+                // fin joker
                 
                 // puis on traite la nouvelle commande
                 if (strcmp(cmd[0],"jobs") == 0) { // question 4
@@ -191,7 +193,6 @@ int executer(char *line, struct list_bg **list_bg)
                                         dup2(tuyau[0],STDIN_FILENO);
                                         close(tuyau[0]);close(tuyau[1]);
                                     }
-                                    execvp(cmd[0], new_cmd); 
                                 }
                                 else {
                                     dup2(tuyau_prec[0], STDIN_FILENO);
@@ -203,20 +204,22 @@ int executer(char *line, struct list_bg **list_bg)
                                         dup2(tuyau[1], STDOUT_FILENO);
                                         close(tuyau[1]);close(tuyau[0]);
                                     }
-                                    execvp(cmd[0], new_cmd);
                                 }
-                                else {
-                                    dup2(tuyau_prec[1], STDOUT_FILENO);
-                                    close(tuyau_prec[1]);
-                                }
+                                /*else {
+                                    dup2(tuyau[1],STDOUT_FILENO);
+                                    close(tuyau[1]);
+                                }*/
+                                execvp(cmd[0], new_cmd);
                                 break;
                         default:
                             // si on est le père
                             if (sline->bg == 0) {  //question 3
                                 if (fin) {
+                                    if (nbCmd > 1) {
+                                        close(tuyau[1]); close(tuyau[0]);
+                                        close(tuyau_prec[1]); close(tuyau_prec[0]);
+                                    }
                                     // on attend le dernier
-                                    close(tuyau[1]); close(tuyau[0]);
-                                    close(tuyau_prec[1]); close(tuyau_prec[0]);
                                     waitpid(pid, &status ,0); //question 2 
                                     if (in != 0) close(in); 
                                     if (out != 0) close(out);
