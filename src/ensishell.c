@@ -95,15 +95,6 @@ void list_bg_jobs(struct list_bg **list_bg) {
         return list_bg;
     }
 }
- 
- void traitement_pipes_multiples(int i, int fd, char * cmd, char**new_cmd, bool multiple, int tuyau[][2]) {
-        if (multiple) {
-            dup2(*tuyau[1-i], fd);
-            close(*tuyau[i]);
-            close(*tuyau[1-i]);
-        }
-        execvp(cmd, new_cmd);
-}
 
 int executer(char *line, struct list_bg **list_bg)
 {
@@ -132,7 +123,11 @@ int executer(char *line, struct list_bg **list_bg)
                 nbCmd++;
             }
             for (int i = 0; i < nbCmd; i++) {
+                int tuyau_prec[2];
+                memcpy(tuyau_prec, tuyau, sizeof(int)*2);
                 char **cmd = sline->seq[i];
+                bool debut = (i==0);
+                bool fin = (i == nbCmd - 1);
                 // joker en wordexp
                 int taille_cmd = 0;
                 while (cmd[taille_cmd] != NULL) {
@@ -190,16 +185,38 @@ int executer(char *line, struct list_bg **list_bg)
                                             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP );
                                     dup2(out, STDOUT_FILENO);
                                 }
-                                traitement_pipes_multiples(0,STDOUT_FILENO,cmd[0], new_cmd, nbCmd>1, &tuyau);
-                                traitement_pipes_multiples(1,STDIN_FILENO,cmd[0], new_cmd, nbCmd>1, &tuyau);
-                                close(tuyau[1]); close(tuyau[0]);
+                                // traitement des pipes
+                                if (fin) {
+                                    if (nbCmd > 1) {
+                                        dup2(tuyau[0],STDIN_FILENO);
+                                        close(tuyau[0]);close(tuyau[1]);
+                                    }
+                                    execvp(cmd[0], new_cmd); 
+                                }
+                                else {
+                                    dup2(tuyau_prec[0], STDIN_FILENO);
+                                    close(tuyau_prec[0]);
+                                }
+                                
+                                if (debut) {
+                                    if (nbCmd > 1) {
+                                        dup2(tuyau[1], STDOUT_FILENO);
+                                        close(tuyau[1]);close(tuyau[0]);
+                                    }
+                                    execvp(cmd[0], new_cmd);
+                                }
+                                else {
+                                    dup2(tuyau_prec[1], STDOUT_FILENO);
+                                    close(tuyau_prec[1]);
+                                }
                                 break;
                         default:
                             // si on est le père
                             if (sline->bg == 0) {  //question 3
-                                if (i == nbCmd - 1) {
+                                if (fin) {
                                     // on attend le dernier
                                     close(tuyau[1]); close(tuyau[0]);
+                                    close(tuyau_prec[1]); close(tuyau_prec[0]);
                                     waitpid(pid, &status ,0); //question 2 
                                     if (in != 0) close(in); 
                                     if (out != 0) close(out);
