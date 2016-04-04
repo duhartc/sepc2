@@ -95,6 +95,15 @@ void list_bg_jobs(struct list_bg **list_bg) {
         return list_bg;
     }
 }
+ 
+ void traitement_pipes_multiples(int i, int fd, char * cmd, char**new_cmd, bool multiple, int tuyau[][2]) {
+        if (multiple) {
+            dup2(*tuyau[1-i], fd);
+            close(*tuyau[i]);
+            close(*tuyau[1-i]);
+        }
+        execvp(cmd, new_cmd);
+}
 
 int executer(char *line, struct list_bg **list_bg)
 {
@@ -118,36 +127,34 @@ int executer(char *line, struct list_bg **list_bg)
             // on doit afficher un message d'erreur
         }
         if (sline->seq != NULL) {
-            // pipe multiple ici, à gérer plus tard
-            // séparation par pipe
-            //for (int i = 0; sline->seq[i]!=0 ;i++) {
-                //char **cour_cmd = sline[i];
-                // la sortie d'une commande est l'entrée de la suivante
-                // TODO
-            //}
             int nbCmd = 0;
             while (sline->seq[nbCmd] != 0) {
                 nbCmd++;
             }
-            // jobs : question 4
             for (int i = 0; i < nbCmd; i++) {
                 char **cmd = sline->seq[i];
                 // joker en wordexp
                 int taille_cmd = 0;
                 while (cmd[taille_cmd] != NULL) {
+                    // on calcule la taille de la commande
                     taille_cmd++;
                 } 
+                // on stocke chacune des sous tailles de commandes
                 int tab_sous_taille_exp[taille_cmd];
+                // on sauve les expensions pour pouvoir les libèrer à la fin
                 wordexp_t tab_wordexp[taille_cmd];
+                // on crée un tableau de liste de chaines de caractère
                 char **tab_exp[taille_cmd];
                 int taille_totale = 0;
                 for (int t = 0; t < taille_cmd; t++) {
                     wordexp(cmd[t], &p, 0);
+                    // on ajoute les exp au tableau
                     tab_exp[t] = p.we_wordv;
                     tab_wordexp[t] = p;
                     tab_sous_taille_exp[t] = p.we_wordc;
                     taille_totale += p.we_wordc;
                 }
+                // tableau contenant les chaines de caractère à la suite
                 char *new_cmd[taille_totale + 1];
                 int k = 0;
                 for (int i = 0; i < taille_cmd; i++) {
@@ -156,9 +163,10 @@ int executer(char *line, struct list_bg **list_bg)
                         k++;
                     }
                 }
-                new_cmd[taille_totale]= NULL;
+                new_cmd[taille_totale]= NULL; // doit obligatoirement se finir par NULL
                 
-                if (strcmp(cmd[0],"jobs") == 0) {
+                // puis on traite la nouvelle commande
+                if (strcmp(cmd[0],"jobs") == 0) { // question 4
                     list_bg_jobs(list_bg);
                 } 
                 else {
@@ -182,21 +190,9 @@ int executer(char *line, struct list_bg **list_bg)
                                             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP );
                                     dup2(out, STDOUT_FILENO);
                                 }
-                                // TODO fonction pour facto
-                                if (i == 1) {
-                                    if (nbCmd > 1) {
-                                        dup2(tuyau[0],STDIN_FILENO);
-                                        close(tuyau[0]);close(tuyau[1]);
-                                    }
-                                    execvp(cmd[0], new_cmd); 
-                                }
-                                else if (i == 0) {
-                                    if (nbCmd > 1) {
-                                        dup2(tuyau[1], STDOUT_FILENO);
-                                        close(tuyau[1]);close(tuyau[0]);
-                                    }
-                                    execvp(cmd[0], new_cmd);
-                                }
+                                traitement_pipes_multiples(0,STDOUT_FILENO,cmd[0], new_cmd, nbCmd>1, &tuyau);
+                                traitement_pipes_multiples(1,STDIN_FILENO,cmd[0], new_cmd, nbCmd>1, &tuyau);
+                                close(tuyau[1]); close(tuyau[0]);
                                 break;
                         default:
                             // si on est le père
