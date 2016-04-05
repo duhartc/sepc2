@@ -123,7 +123,6 @@ int executer(char *line, struct list_bg **list_bg)
             }
             int tuyau_prec[2];
             for (int i = 0; i < nbCmd; i++) {
-                memcpy(tuyau_prec, tuyau, sizeof(int)*2);
                 char **cmd = sline->seq[i];
                 bool debut = (i==0);
                 bool fin = (i == nbCmd - 1);
@@ -187,28 +186,20 @@ int executer(char *line, struct list_bg **list_bg)
                                             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP );
                                     dup2(out, STDOUT_FILENO);
                                 }
-                                // traitement des pipes
-                                if (fin) {
-                                    if (nbCmd > 1) {
-                                        dup2(tuyau[0],STDIN_FILENO);
-                                        close(tuyau[0]);close(tuyau[1]);
-                                    }
-                                }
-                                else {
-                                    dup2(tuyau_prec[0], STDIN_FILENO);
+                                // traitement des pipes multiples
+                                if (!debut) {
+                                    dup2(tuyau_prec[0], 0);
                                     close(tuyau_prec[0]);
+                                    close(tuyau_prec[1]);
+
                                 }
-                                
-                                if (debut) {
-                                    if (nbCmd > 1) {
-                                        dup2(tuyau[1], STDOUT_FILENO);
-                                        close(tuyau[1]);close(tuyau[0]);
-                                    }
-                                }
-                                /*else {
-                                    dup2(tuyau[1],STDOUT_FILENO);
+                                if (!fin) {
+                                    close(tuyau[0]);
+                                    dup2(tuyau[1], 1);
                                     close(tuyau[1]);
-                                }*/
+
+                                    execvp(cmd[0], new_cmd);
+                                }
                                 execvp(cmd[0], new_cmd);
                                 break;
                         default:
@@ -223,6 +214,12 @@ int executer(char *line, struct list_bg **list_bg)
                                     waitpid(pid, &status ,0); //question 2 
                                     if (in != 0) close(in); 
                                     if (out != 0) close(out);
+                                }
+                                else {
+                                    if (!debut) {
+                                        close(tuyau_prec[1]); close(tuyau_prec[0]);
+                                    }
+                                    memcpy(tuyau_prec, tuyau, sizeof(int)*2);
                                 }
                             }
                             else {
